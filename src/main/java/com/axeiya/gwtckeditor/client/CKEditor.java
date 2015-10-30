@@ -15,9 +15,11 @@
 package com.axeiya.gwtckeditor.client;
 
 import com.axeiya.gwtckeditor.client.event.HasInstanceReadyHandlers;
+import com.axeiya.gwtckeditor.client.event.HasKeyPressedHandlers;
 import com.axeiya.gwtckeditor.client.event.HasSaveHandlers;
 import com.axeiya.gwtckeditor.client.event.InstanceReadyEvent;
 import com.axeiya.gwtckeditor.client.event.InstanceReadyHandler;
+import com.axeiya.gwtckeditor.client.event.KeyPressedHandler;
 import com.axeiya.gwtckeditor.client.event.SaveEvent;
 import com.axeiya.gwtckeditor.client.event.SaveHandler;
 import com.google.gwt.core.client.JavaScriptObject;
@@ -53,7 +55,7 @@ import com.google.gwt.user.client.ui.TextArea;
  * @author Emmanuel COQUELIN <emmanuel.coquelin@axeiya.com>
  */
 public class CKEditor extends Composite implements HasSaveHandlers<CKEditor>, HasValueChangeHandlers<String>, ClickHandler, HasAlignment, HasHTML,
-		HasText, HasInstanceReadyHandlers {
+		HasText, HasInstanceReadyHandlers , HasKeyPressedHandlers{
 
 	/**
 	 * Used for catching Save event
@@ -112,6 +114,7 @@ public class CKEditor extends Composite implements HasSaveHandlers<CKEditor>, Ha
 
 	protected VerticalAlignmentConstant vAlign = null;
 	private boolean isText;
+	private boolean suppressKeys = false;
 
 	/**
 	 * Creates an editor with the CKConfig.basic configuration. By default, the
@@ -153,6 +156,10 @@ public class CKEditor extends Composite implements HasSaveHandlers<CKEditor>, Ha
 		return addHandler(handler, InstanceReadyEvent.TYPE);
 	}
 	
+	public void suppressKeys(Boolean suppress) {
+		this.suppressKeys = suppress;
+	}
+	
 	private native void bindInstanceReadyEvent() /*-{
 		var selfJ = this;
 		var editor = this.@com.axeiya.gwtckeditor.client.CKEditor::editor;
@@ -168,6 +175,19 @@ public class CKEditor extends Composite implements HasSaveHandlers<CKEditor>, Ha
 		editor.on('change', function() {
 			@com.google.gwt.event.logical.shared.ValueChangeEvent::fire(Lcom/google/gwt/event/logical/shared/HasValueChangeHandlers;Ljava/lang/Object;)(selfJ, editor.getData());
 			timer.@com.axeiya.gwtckeditor.client.CKEditor.AutoSaveTimer::delay()();
+		});
+	}-*/;
+	
+	private native void bindKeyEvent() /*-{
+		var selfJ = this;
+		var editor = this.@com.axeiya.gwtckeditor.client.CKEditor::editor;
+		editor.on('key', function(evt) {			
+			console.log(evt.data.keyCode);
+			if(selfJ.@com.axeiya.gwtckeditor.client.CKEditor::suppressKeys) {
+				if(evt.data.keyCode == 13 || evt.data.keyCode == 38 || evt.data.keyCode == 40)
+					evt.cancel();
+			}
+			@com.axeiya.gwtckeditor.client.event.KeyPressedEvent::fire(Lcom/axeiya/gwtckeditor/client/event/HasKeyPressedHandlers;I)(selfJ, evt.data.keyCode);
 		});
 	}-*/;
 
@@ -236,6 +256,24 @@ public class CKEditor extends Composite implements HasSaveHandlers<CKEditor>, Ha
 		var e = this.@com.axeiya.gwtckeditor.client.CKEditor::editor;
 		return e.getSelection();
 	}-*/;
+	
+	public native void setFocusAtEnd() /*-{
+		var e = this.@com.axeiya.gwtckeditor.client.CKEditor::editor;
+		if (e) {
+				e.focus();
+
+				var lastc = e.document.getBody().getLast();
+				e.getSelection().selectElement(lastc);
+				var range = e.getSelection().getRanges()[0];
+				range.collapse(false);
+				range.setStart(lastc, range.startOffset);
+				try {
+					range.setEnd(lastc, range.endOffset);
+				} catch (err) {
+				}
+				range.select();
+			}
+	}-*/;
 
 	/**
 	 * Use getHTML() instead. Returns the editor text
@@ -271,7 +309,7 @@ public class CKEditor extends Composite implements HasSaveHandlers<CKEditor>, Ha
 		div.appendChild(baseTextArea);
 		DOM.setElementAttribute(baseTextArea, "name", name);
 		this.sinkEvents(Event.ONCLICK | Event.KEYEVENTS);
-
+	
 		if (config.isUsingFormPanel()) {
 			FormPanel form = new FormPanel();
 			Button submit = new Button();
@@ -324,6 +362,7 @@ public class CKEditor extends Composite implements HasSaveHandlers<CKEditor>, Ha
 
 			bindInstanceReadyEvent();
 			bindChangeEvent();
+			bindKeyEvent();
 			/*
 			 * if (config.getBreakLineChars() != null) {
 			 * setNativeBreakLineChars(config.getBreakLineChars()); }
@@ -369,6 +408,8 @@ public class CKEditor extends Composite implements HasSaveHandlers<CKEditor>, Ha
 		this.@com.axeiya.gwtckeditor.client.CKEditor::editor = $wnd.CKEDITOR
 				.replace(o, config);
 	}-*/;
+	
+	
 
 	private native void setAddFocusOnLoad(boolean focus)/*-{
 		var e = this.@com.axeiya.gwtckeditor.client.CKEditor::editor;
@@ -402,6 +443,11 @@ public class CKEditor extends Composite implements HasSaveHandlers<CKEditor>, Ha
 	public void setData(String data) {
 		setHTML(data);
 	}
+	
+	public native void insertText(String text) /*-{
+		var editor = this.@com.axeiya.gwtckeditor.client.CKEditor::editor;
+		editor.insertText(text);
+	}-*/;
 
 	/**
 	 * Use to disable CKEditor's instance
@@ -537,6 +583,7 @@ public class CKEditor extends Composite implements HasSaveHandlers<CKEditor>, Ha
 				try {
 					range.setEnd(lastc, range.endOffset);
 				} catch (err) {
+					console.log(err);
 				}
 				range.select();
 			}
@@ -580,5 +627,10 @@ public class CKEditor extends Composite implements HasSaveHandlers<CKEditor>, Ha
 	@Override
 	public void setWidth(String width) {
 		super.setWidth(width);
+	}
+
+	@Override
+	public HandlerRegistration addKeyPressedHandler(KeyPressedHandler handler) {
+		return addHandler(handler, com.axeiya.gwtckeditor.client.event.KeyPressedEvent.TYPE);
 	}
 }
